@@ -25,8 +25,12 @@ namespace Md5DictionaryAttack
                 Console.ForegroundColor = ConsoleColor.Gray;
                 return;
             }
-
+            DateTime start = DateTime.Now;
             wordlist = loadWordList("wordlist.txt").OrderBy(md5 => md5.Md5).Distinct(new DistinctPairComparer()).ToList();
+            DateTime end = DateTime.Now;
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("Wordlist loaded after: " + (end - start).TotalSeconds + " secs");
+            Console.ForegroundColor = ConsoleColor.Gray;
 
             if (args[0] == "-f")
             {
@@ -133,7 +137,10 @@ namespace Md5DictionaryAttack
             foreach (string word in words)
             {
                 string hash = md5hash(word.Trim());
-                File.AppendAllText("wordlist.txt", String.Format("{0},{1}", hash, word.Trim()) + Environment.NewLine);
+
+                // Using Streamwriter is faster than AppendAllText
+                //File.AppendAllText("wordlist.txt", String.Format("{0},{1}", hash, word.Trim()) + Environment.NewLine);
+                appendToWordList(String.Format("{0},{1}", hash, word.Trim()) + Environment.NewLine);
                 counter++;
                 Console.WriteLine(String.Format("({0}%) {1}/{2} Added: {3} - {4}", (((double)counter / wordlength)* 100).ToString("#.##"), counter, wordlength, hash, word));
             }
@@ -164,8 +171,8 @@ namespace Md5DictionaryAttack
                 return sb.ToString().ToLower();
             }
         }
-
-
+        /*
+        // Function down below is way much faster than this.
         static List<Md5Pair> loadWordList(string path)
         {
             List<Md5Pair> list = new List<Md5Pair>();
@@ -180,6 +187,39 @@ namespace Md5DictionaryAttack
                 }
             return list;
         }
+        */
+
+        static List<Md5Pair> loadWordList(string path)
+        {
+            List<Md5Pair> list = new List<Md5Pair>();
+            using (FileStream fs = File.OpenRead(path))
+            using (BufferedStream bs = new BufferedStream(fs))
+            using (StreamReader sr = new StreamReader(bs))
+            {
+                string s;
+                while ((s = sr.ReadLine()) != null)
+                {
+                    string[] parts = s.Split(',');
+                    Md5Pair pair = new Md5Pair();
+                    pair.Md5 = parts[0];
+                    pair.word = parts[1];
+                    list.Add(pair);
+                }
+            }
+
+            return list;
+        }
+
+        static void appendToWordList(string text)
+        {
+            using (StreamWriter stream = new StreamWriter("wordlist.txt", true))
+            {
+                stream.WriteLine(text);
+            }
+        }
+
+
+
 
         static Md5Pair find(string md5)
         {
@@ -188,24 +228,30 @@ namespace Md5DictionaryAttack
 
         static void printSearchResult(string md5)
         {
+            DateTime start = DateTime.Now;
             Md5Pair pair = find(md5);
             if (pair == null)
             {
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine("Not Found: " + md5);
-                Console.ForegroundColor = ConsoleColor.Gray;
             }
             else
             {
                 Console.ForegroundColor = ConsoleColor.Green;
                 Console.WriteLine(string.Format("Found: {0} = ({1})", md5, pair.word));
-                Console.ForegroundColor = ConsoleColor.Gray;
+
             }
+
+            DateTime end = DateTime.Now;
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("Time Elapsed: " + (end - start).TotalSeconds + " secs");
+            Console.ForegroundColor = ConsoleColor.Gray;
+
+
         }
 
         class DistinctPairComparer : IEqualityComparer<Md5Pair>
         {
-
             public bool Equals(Md5Pair x, Md5Pair y)
             {
                 return x.Md5 == y.Md5 &&
